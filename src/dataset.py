@@ -1,8 +1,64 @@
+import os
+from pathlib import Path
 import numpy as np
 import torch
 import torch.utils.data as data
 import pandas as pd
 import tools
+
+
+_NPY_RADAR_CACHE = {}
+
+
+def resolve_npy_path(path_str):
+    """
+    Intelligent Path Resolver:
+    If path_str does not exist on disk (e.g. hardcoded /data/VAD/... path in CSV),
+    automatically scans /kaggle/input, /kaggle/working, and local directories
+    to locate the actual .npy file.
+    """
+    if os.path.exists(path_str):
+        return path_str
+
+    basename = os.path.basename(str(path_str).replace('\\', '/'))
+    if basename in _NPY_RADAR_CACHE:
+        return _NPY_RADAR_CACHE[basename]
+
+    # Initialize cache by scanning potential data roots on first miss
+    if not _NPY_RADAR_CACHE:
+        search_roots = [
+            Path("/kaggle/input"),
+            Path("/kaggle/working"),
+            Path("./UCFClipFeatures"),
+            Path("../UCFClipFeatures"),
+            Path("./XDTrainClipFeatures"),
+            Path("./XDTestClipFeatures"),
+            Path("."),
+        ]
+        for root in search_roots:
+            if root.exists():
+                try:
+                    for p in root.rglob("*.npy"):
+                        if p.name not in _NPY_RADAR_CACHE:
+                            _NPY_RADAR_CACHE[p.name] = str(p.resolve())
+                except Exception:
+                    pass
+
+    # Direct match
+    if basename in _NPY_RADAR_CACHE:
+        return _NPY_RADAR_CACHE[basename]
+
+    # Kaggle filename normalization variants (# -> +, _, or removed)
+    variants = [
+        basename.replace('#', '+'),
+        basename.replace('#', '_'),
+        basename.replace('#', '')
+    ]
+    for alt in variants:
+        if alt in _NPY_RADAR_CACHE:
+            return _NPY_RADAR_CACHE[alt]
+
+    return path_str
 
 
 class UCFDataset(data.Dataset):
@@ -27,8 +83,10 @@ class UCFDataset(data.Dataset):
         return self.df.shape[0]
 
     def __getitem__(self, index):
-        path = self.df.loc[index]['path']
+        raw_path = self.df.loc[index]['path']
         label = self.df.loc[index]['label']
+        path = resolve_npy_path(raw_path)
+
         clip_feature = np.load(path)
 
         if not self.test_mode:
@@ -53,7 +111,6 @@ class XDDataset(data.Dataset):
 
         if not test_mode:
             if normal:
-                # XD-Violence normal label is 'B' or 'Normal'
                 self.df = self.df.loc[self.df['label'].astype(str).str.contains('B|Normal')].reset_index(drop=True)
             else:
                 self.df = self.df.loc[~self.df['label'].astype(str).str.contains('B|Normal')].reset_index(drop=True)
@@ -62,8 +119,10 @@ class XDDataset(data.Dataset):
         return self.df.shape[0]
 
     def __getitem__(self, index):
-        path = self.df.loc[index]['path']
+        raw_path = self.df.loc[index]['path']
         label = self.df.loc[index]['label']
+        path = resolve_npy_path(raw_path)
+
         clip_feature = np.load(path)
 
         if not self.test_mode:
