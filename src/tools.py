@@ -91,4 +91,14 @@ def process_split(feat, length):
     clip_length = feat.shape[0]
     if clip_length < length:
         return pad(feat, length), clip_length
-    return feat, clip_length
+    else:
+        split_num = int(clip_length / length) + 1
+        splits = []
+        for i in range(split_num):
+            start = i * length
+            end = min(start + length, clip_length)
+            chunk = feat[start:end, :]
+            if chunk.shape[0] < length:
+                chunk = pad(chunk, length)
+            splits.append(chunk.reshape(1, length, feat.shape[1]))
+        return np.concatenate(splits, axis=0), clip_length

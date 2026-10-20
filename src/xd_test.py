@@ -26,22 +26,33 @@ def evaluate_xd(model, test_loader, maxlen, gt, gtsegments, gtlabels, device, te
 
     with torch.no_grad():
         for i, item in enumerate(test_loader):
-            visual = item[0].squeeze(0)
+            visual = item[0].squeeze(0)  # (split_num, maxlen, 512) or (maxlen, 512)
             length = int(item[2].item()) if torch.is_tensor(item[2]) else int(item[2])
             len_cur = length
 
             if visual.dim() == 2:
-                visual = visual.unsqueeze(0)
+                visual = visual.unsqueeze(0)  # (1, maxlen, 512)
             visual = visual.to(device)
+            split_num = visual.shape[0]
 
-            lengths = torch.tensor([min(length, maxlen)], dtype=torch.long, device=device)
+            # Construct chunk lengths for all splits
+            rem_len = len_cur
+            lengths = torch.zeros(split_num, dtype=torch.long, device=device)
+            for j in range(split_num):
+                if rem_len > maxlen:
+                    lengths[j] = maxlen
+                    rem_len -= maxlen
+                else:
+                    lengths[j] = rem_len
+
             padding_mask = get_batch_mask(lengths, maxlen).to(device)
 
-            out = model(visual[:, :maxlen, :], padding_mask=padding_mask, text_features=text_features)
+            out = model(visual, padding_mask=padding_mask, text_features=text_features)
 
-            s_final = out['final_score'][0, :len_cur].squeeze(-1).cpu().numpy()
-            s_det = out['det_score'][0, :len_cur].squeeze(-1).cpu().numpy()
-            s_rec = out['rec_score'][0, :len_cur].squeeze(-1).cpu().numpy()
+            # Flatten across all chunks and slice to true video length len_cur
+            s_final = out['final_score'].reshape(-1)[:len_cur].cpu().numpy()
+            s_det = out['det_score'].reshape(-1)[:len_cur].cpu().numpy()
+            s_rec = out['rec_score'].reshape(-1)[:len_cur].cpu().numpy()
 
             all_scores_final.append(s_final)
             all_scores_det.append(s_det)
