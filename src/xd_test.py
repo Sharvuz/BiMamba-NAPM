@@ -47,6 +47,9 @@ def evaluate_xd(model, test_loader, maxlen, gt, gtsegments, gtlabels, device, te
             all_scores_det.append(s_det)
             all_scores_rec.append(s_rec)
 
+            if (i + 1) % 100 == 0 or (i + 1) == len(test_loader):
+                print(f"    Testing [{i+1:03d}/{len(test_loader):03d}] videos...", flush=True)
+
     all_scores_final = np.concatenate(all_scores_final, axis=0)
     all_scores_det = np.concatenate(all_scores_det, axis=0)
     all_scores_rec = np.concatenate(all_scores_rec, axis=0)

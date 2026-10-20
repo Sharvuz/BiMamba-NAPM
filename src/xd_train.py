@@ -31,7 +31,13 @@ def train_xd():
 
     set_seed(args.seed)
     os.makedirs(args.save_dir, exist_ok=True)
-    device = torch.device(args.device if torch.cuda.is_available() and args.device == 'cuda' else 'cpu')
+
+    if torch.cuda.is_available() and args.device == 'cuda':
+        torch.cuda.set_device(0)
+        _ = torch.zeros(1, device='cuda')
+        device = torch.device('cuda')
+    else:
+        device = torch.device('cpu')
 
     print(f"\n=======================================================")
     print(f"  BiMamba-NAPM: Training from Scratch on XD-Violence")
@@ -101,6 +107,7 @@ def train_xd():
 
     best_ap = 0.0
     best_auc = 0.0
+    total_steps = len(train_abn_loader)
 
     # 5. Training Loop
     for epoch in range(1, args.max_epoch + 1):
@@ -111,6 +118,7 @@ def train_xd():
         running_napm = 0.0
 
         nor_iter = iter(train_nor_loader)
+        print(f"--- Epoch [{epoch:02d}/{args.max_epoch:02d}] Started ---", flush=True)
 
         for step, (abn_visual, abn_labels, abn_lengths) in enumerate(train_abn_loader):
             try:
@@ -146,18 +154,22 @@ def train_xd():
             running_mil += loss_dict['loss_mil'].item()
             running_napm += loss_dict['loss_napm'].item()
 
+            if (step + 1) % 10 == 0 or (step + 1) == total_steps:
+                print(f"  Step [{step+1:02d}/{total_steps:02d}] | "
+                      f"Loss: {loss.item():.4f} (MIL: {loss_dict['loss_mil'].item():.4f}, NAPM: {loss_dict['loss_napm'].item():.4f})", flush=True)
+
         scheduler.step()
         epoch_time = time.time() - start_time
-        num_steps = len(train_abn_loader)
-        avg_loss = running_loss / num_steps
-        avg_mil = running_mil / num_steps
-        avg_napm = running_napm / num_steps
+        avg_loss = running_loss / total_steps
+        avg_mil = running_mil / total_steps
+        avg_napm = running_napm / total_steps
 
-        print(f"Epoch [{epoch:02d}/{args.max_epoch:02d}] ({epoch_time:.1f}s) | "
-              f"Loss: {avg_loss:.4f} (MIL: {avg_mil:.4f}, NAPM: {avg_napm:.4f}) | "
+        print(f"Epoch [{epoch:02d}/{args.max_epoch:02d}] Summary ({epoch_time:.1f}s) | "
+              f"Avg Loss: {avg_loss:.4f} (MIL: {avg_mil:.4f}, NAPM: {avg_napm:.4f}) | "
               f"LR: {scheduler.get_last_lr()[0]:.2e}", flush=True)
 
         # Validation
+        print(f"  Evaluating on test set ({len(test_loader)} videos)...", flush=True)
         eval_model = model.module if hasattr(model, 'module') else model
         ap, auc = evaluate_xd(eval_model, test_loader, args.visual_length, gt, gtsegments, gtlabels, device, text_features)
 

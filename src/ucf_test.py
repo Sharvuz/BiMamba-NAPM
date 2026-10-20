@@ -53,6 +53,9 @@ def evaluate_ucf(model, test_loader, maxlen, gt, gtsegments, gtlabels, device, t
                 s_sem = out['sem_score'][0, :len_cur].squeeze(-1).cpu().numpy()
                 all_scores_sem.append(s_sem)
 
+            if (i + 1) % 50 == 0 or (i + 1) == len(test_loader):
+                print(f"    Testing [{i+1:03d}/{len(test_loader):03d}] videos...", flush=True)
+
     all_scores_final = np.concatenate(all_scores_final, axis=0)
     all_scores_det = np.concatenate(all_scores_det, axis=0)
     all_scores_rec = np.concatenate(all_scores_rec, axis=0)
