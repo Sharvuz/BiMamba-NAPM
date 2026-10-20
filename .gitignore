@@ -1,0 +1,22 @@
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.ipynb_checkpoints
+
+# Model weights
+*.pth
+*.pt
+!models/.gitkeep
+!list/*.pt
+
+# Kaggle / environment logs
+*.log
+*.npy
+*.csv
+!list/*.npy
+!list/*.csv
+
+# OS
+.DS_Store
+Thumbs.db
